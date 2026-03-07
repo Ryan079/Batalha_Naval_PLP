@@ -1,8 +1,6 @@
-pub mod atlas_tiles;
-pub mod estilo_preview;
-pub mod renderer_tabuleiro;
+pub mod renderizacao_tabuleiro;
 
-pub use renderer_tabuleiro::{
+pub use renderizacao_tabuleiro::{
     limpar_preview,
     render_preview_posicionamento,
     render_resultado_disparo,

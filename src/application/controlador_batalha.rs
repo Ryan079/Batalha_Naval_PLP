@@ -9,7 +9,7 @@ use crate::domain::disparo::ResultadoDisparo;
 use crate::domain::jogador::Jogador;
 use crate::domain::jogador_ia::JogadorIA;
 use crate::domain::tabuleiro::BOARD_SIZE;
-use crate::presentation::tabuleiro_visual::{
+use crate::presentation::batalha::{
     limpar_preview, render_preview_posicionamento, render_resultado_disparo, render_tabuleiro_jogador,
 };
 
@@ -211,7 +211,11 @@ impl ControladorBatalha {
             limpar_preview(&mut preview_map);
             return;
         };
-        render_preview_posicionamento(&mut preview_map, &preview.celulas, preview.valido);
+        let Some((nome_navio, _)) = self.fase_posicionamento.navio_atual() else {
+            limpar_preview(&mut preview_map);
+            return;
+        };
+        render_preview_posicionamento(&mut preview_map, nome_navio, &preview.celulas, preview.valido);
     }
 
     fn limpar_preview_posicionamento(&mut self) {

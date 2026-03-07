@@ -3,10 +3,11 @@ use godot::prelude::*;
 
 use crate::domain::disparo::ResultadoDisparo;
 use crate::domain::tabuleiro::{Celula, EstadoTabuleiro, BOARD_SIZE};
-use crate::presentation::tabuleiro_visual::atlas_tiles::{ATLAS_ACERTO, ATLAS_AGUA, ATLAS_NAVIO};
-use crate::presentation::tabuleiro_visual::estilo_preview::{
+use crate::presentation::batalha::renderizacao_tabuleiro::atlas_tiles::{ATLAS_ACERTO, ATLAS_AGUA};
+use crate::presentation::batalha::renderizacao_tabuleiro::estilo_preview::{
     cor_preview_invalido, cor_preview_valido,
 };
+use crate::presentation::batalha::renderizacao_tabuleiro::navio_tiles::atlas_navio_por_nome;
 
 pub fn render_resultado_disparo(
     map: &mut Gd<TileMapLayer>,
@@ -36,10 +37,15 @@ pub fn render_tabuleiro_jogador(map: &mut Gd<TileMapLayer>, tabuleiro: &EstadoTa
             let map_coord = Vector2i::new(x as i32, y as i32);
             if let Some(celula) = tabuleiro.valor_celula(x, y) {
                 match celula {
-                    Celula::Ocupado(_) => {
+                    Celula::Ocupado(navio_idx) => {
+                        let atlas_navio = tabuleiro
+                            .navios
+                            .get(navio_idx)
+                            .map(|navio| atlas_navio_por_nome(&navio.nome))
+                            .unwrap_or(atlas_navio_por_nome(""));
                         map.set_cell_ex(map_coord)
                             .source_id(0)
-                            .atlas_coords(Vector2i::new(ATLAS_NAVIO.0, ATLAS_NAVIO.1))
+                            .atlas_coords(Vector2i::new(atlas_navio.0, atlas_navio.1))
                             .done();
                     }
                     Celula::Agua => {
@@ -63,6 +69,7 @@ pub fn render_tabuleiro_jogador(map: &mut Gd<TileMapLayer>, tabuleiro: &EstadoTa
 
 pub fn render_preview_posicionamento(
     preview_map: &mut Gd<TileMapLayer>,
+    nome_navio: &str,
     celulas: &[(usize, usize)],
     valido: bool,
 ) {
@@ -74,11 +81,13 @@ pub fn render_preview_posicionamento(
         preview_map.set_modulate(cor_preview_invalido());
     }
 
+    let atlas_navio = atlas_navio_por_nome(nome_navio);
+
     for (x, y) in celulas.iter() {
         preview_map
             .set_cell_ex(Vector2i::new(*x as i32, *y as i32))
             .source_id(0)
-            .atlas_coords(Vector2i::new(ATLAS_NAVIO.0, ATLAS_NAVIO.1))
+            .atlas_coords(Vector2i::new(atlas_navio.0, atlas_navio.1))
             .done();
     }
 }
