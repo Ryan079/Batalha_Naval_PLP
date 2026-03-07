@@ -1,3 +1,5 @@
 pub mod disparo;
-pub mod player;
+pub mod estrategias_ia;
+pub mod jogador;
+pub mod jogador_ia;
 pub mod tabuleiro;

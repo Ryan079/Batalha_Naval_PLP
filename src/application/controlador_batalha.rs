@@ -1,77 +1,346 @@
-use godot::classes::{INode2D, InputEvent, InputEventMouseButton, Node2D, TileMapLayer};
+use godot::classes::{INode2D, Input, InputEvent, InputEventKey, InputEventMouseButton, Label, Node2D, TileMapLayer};
 use godot::global::MouseButton;
 use godot::prelude::*;
 
-use crate::domain::disparo::{ResultadoDisparo, executar_disparo};
-use crate::domain::tabuleiro::{BOARD_SIZE, EstadoTabuleiro};
+use crate::application::fase_posicionamento::FasePosicionamento;
+use crate::application::fase_selecao_dificuldade::FaseSelecaoDificuldade;
+use crate::application::helpers::{conversao_coordenadas, coordenadas, cursor};
+use crate::application::gerenciador_turnos::{GerenciadorTurnos, EstadoTurno};
+use crate::domain::disparo::ResultadoDisparo;
+use crate::domain::jogador::Jogador;
+use crate::domain::jogador_ia::JogadorIA;
+use crate::presentation::batalha::{
+    limpar_preview, render_preview_posicionamento, render_resultado_disparo, render_tabuleiro_jogador,
+};
+
+const DELAY_TURNO_IA: f64 = 0.7;
 
 #[derive(GodotClass)]
-#[class(base=Node2D)]
+#[class(base = Node2D)]
 pub struct ControladorBatalha {
-    #[allow(dead_code)]
-    tabuleiro_jogador: EstadoTabuleiro,
-    tabuleiro_inimigo: EstadoTabuleiro,
+    jogador_humano: Jogador,
+    jogador_ia: Option<JogadorIA>,
+    fase_posicionamento: FasePosicionamento,
+    fase_selecao_dificuldade: FaseSelecaoDificuldade,
+    gerenciador_turnos: GerenciadorTurnos,
+    tempo_restante_ia: f64,
+    tooltip_instrucao: Option<Gd<Label>>,
     base: Base<Node2D>,
 }
 
 #[godot_api]
 impl INode2D for ControladorBatalha {
     fn init(base: Base<Node2D>) -> Self {
-        let tabuleiro_jogador = EstadoTabuleiro::vazio();
-        let mut tabuleiro_inimigo = EstadoTabuleiro::vazio();
-        let _ = tabuleiro_inimigo.posicionar_navio(2, 2);
+        let total_navios: u32 = crate::domain::tabuleiro::FROTA_PADRAO
+            .iter()
+            .map(|config| config.quantidade as u32)
+            .sum();
 
         Self {
-            tabuleiro_jogador,
-            tabuleiro_inimigo,
+            jogador_humano: Jogador::novo_humano(),
+            jogador_ia: None,
+            fase_posicionamento: FasePosicionamento::nova(),
+            fase_selecao_dificuldade: FaseSelecaoDificuldade::nova(),
+            gerenciador_turnos: GerenciadorTurnos::novo(total_navios),
+            tempo_restante_ia: 0.0,
+            tooltip_instrucao: None,
             base,
         }
     }
 
+    fn ready(&mut self) {
+        if let Some(campo_jogador) = self.base().try_get_node_as::<TileMapLayer>("CampoJogador") {
+            coordenadas::gerar_coordenadas(campo_jogador);
+        }
+        if let Some(campo_ia) = self.base().try_get_node_as::<TileMapLayer>("CampoIA") {
+            coordenadas::gerar_coordenadas(campo_ia);
+        }
+    }
+
+    fn process(&mut self, delta: f64) {
+        if self.gerenciador_turnos.estado_atual() == EstadoTurno::SelecaoDificuldade {
+            if let Some(mut tooltip) = self.tooltip_instrucao.clone() {
+                tooltip.set_text(self.fase_selecao_dificuldade.texto_tooltip());
+                tooltip.set_visible(true);
+                tooltip.set_position(Vector2::new(20.0, 20.0));
+            }
+            
+            if let Some(campo_jogador) = self.base().try_get_node_as::<TileMapLayer>("CampoJogador") {
+                cursor::esconder_cursor(campo_jogador);
+            }
+            if let Some(campo_ia) = self.base().try_get_node_as::<TileMapLayer>("CampoIA") {
+                cursor::esconder_cursor(campo_ia);
+            }
+            
+            return;
+        }
+
+        self.atualizar_tooltip_posicionamento();
+        
+        if self.gerenciador_turnos.estado_atual() == EstadoTurno::PosicionamentoJogador {
+            self.atualizar_preview_posicionamento();
+            let input = Input::singleton();
+            if input.is_action_just_pressed("rotacionar_navio") {
+                self.fase_posicionamento.alternar_orientacao();
+            }
+        } else {
+            self.limpar_preview_posicionamento();
+        }
+
+        self.atualizar_controle_cursor();
+
+        if self.gerenciador_turnos.estado_atual() == EstadoTurno::TurnoIA {
+            self.tempo_restante_ia -= delta;
+            if self.tempo_restante_ia <= 0.0 {
+                self.executar_turno_ia();
+            }
+        }
+    }
+
     fn input(&mut self, event: Gd<InputEvent>) {
-        if let Ok(mouse_event) = event.try_cast::<InputEventMouseButton>() {
-            if mouse_event.is_pressed() && mouse_event.get_button_index() == MouseButton::LEFT {
-                let click_pos = mouse_event.get_global_position();
+        if self.gerenciador_turnos.jogo_terminou() {
+            return;
+        }
 
-                if let Some(mut enemy_map) = self.base().try_get_node_as::<TileMapLayer>("CampoIA")
-                {
-                    let local_pos = enemy_map.to_local(click_pos);
-                    let map_coord = enemy_map.local_to_map(local_pos);
-
-                    if map_coord.x >= 0
-                        && map_coord.x < BOARD_SIZE as i32
-                        && map_coord.y >= 0
-                        && map_coord.y < BOARD_SIZE as i32
-                    {
-                        let x = map_coord.x as usize;
-                        let y = map_coord.y as usize;
-                        let retorno_disparo = executar_disparo(&mut self.tabuleiro_inimigo, x, y);
-
-                        godot_print!("{}", retorno_disparo.mensagem);
-
-                        match retorno_disparo.resultado {
-                            ResultadoDisparo::Agua => {
-                                enemy_map
-                                    .set_cell_ex(map_coord)
-                                    .source_id(0)
-                                    .atlas_coords(Vector2i::new(8, 3))
-                                    .done();
-                            }
-                            ResultadoDisparo::Acerto => {
-                                enemy_map
-                                    .set_cell_ex(map_coord)
-                                    .source_id(0)
-                                    .atlas_coords(Vector2i::new(10, 3))
-                                    .done();
-                            }
-                            ResultadoDisparo::JaDisparado => {}
-                            ResultadoDisparo::ForaDosLimites => {}
-                        }
+        if self.gerenciador_turnos.estado_atual() == EstadoTurno::SelecaoDificuldade {
+            if let Ok(key_event) = event.try_cast::<InputEventKey>() {
+                if key_event.is_pressed() && !key_event.is_echo() {
+                    let keycode = key_event.get_keycode();
+                    if let Some(ia) = self.fase_selecao_dificuldade.processar_tecla(keycode) {
+                        self.jogador_ia = Some(ia);
+                        self.gerenciador_turnos.confirmar_dificuldade();
                     }
-                } else {
-                    godot_print!("Erro: Nó 'CampoIA' não encontrado!");
                 }
+            }
+            return;
+        }
+        
+        if let Ok(mouse_event) = event.try_cast::<InputEventMouseButton>() {
+            if !mouse_event.is_pressed() || mouse_event.get_button_index() != MouseButton::LEFT {
+                return;
+            }
+            let click_pos = self.base().get_global_mouse_position();
+            
+            match self.gerenciador_turnos.estado_atual() {
+                EstadoTurno::PosicionamentoJogador => {
+                    self.tratar_clique_posicionamento(click_pos);
+                }
+                EstadoTurno::TurnoJogador => {
+                    self.tratar_clique_disparo_jogador(click_pos);
+                }
+                _ => {}
             }
         }
     }
 }
+
+impl ControladorBatalha {
+    fn atualizar_tooltip_posicionamento(&mut self) {
+        let Some(mut tooltip) = self.tooltip_instrucao.clone() else {
+            return;
+        };
+
+        if self.gerenciador_turnos.estado_atual() != EstadoTurno::PosicionamentoJogador {
+            tooltip.set_visible(false);
+            return;
+        }
+
+        let Some((nome, tamanho)) = self.fase_posicionamento.navio_atual() else {
+            tooltip.set_visible(false);
+            return;
+        };
+
+        let texto = format!(
+            "Posicione: {} ({})\nClique: posicionar | R: rotacionar ({})",
+            nome,
+            tamanho,
+            self.fase_posicionamento.orientacao_texto()
+        );
+
+        tooltip.set_text(&texto);
+        tooltip.set_visible(true);
+
+        let mouse_pos_global = self.base().get_global_mouse_position();
+        let mouse_pos_local = self.base().to_local(mouse_pos_global);
+        tooltip.set_position(mouse_pos_local + Vector2::new(14.0, 14.0));
+    }
+
+    fn tratar_clique_posicionamento(&mut self, click_pos: Vector2) {
+        let Some(player_map) = self.base().try_get_node_as::<TileMapLayer>("CampoJogador") else {
+            return;
+        };
+
+        let Some((x, y, _)) = conversao_coordenadas::clique_para_coordenada(player_map, click_pos) else {
+            return;
+        };
+
+        match self
+            .fase_posicionamento
+            .tentar_posicionar_navio(&mut self.jogador_humano, x, y)
+        {
+            Ok(concluiu) => {
+                self.atualizar_visual_meu_campo();
+                if concluiu {
+                    self.iniciar_fase_batalha();
+                }
+            }
+            Err(_) => {}
+        }
+    }
+
+    fn iniciar_fase_batalha(&mut self) {
+        self.gerenciador_turnos.finalizar_posicionamento_jogador();
+        
+        if let Some(ref mut ia) = self.jogador_ia {
+            ia.jogador_mut().tabuleiro_mut().preencher_aleatoriamente();
+        }
+        
+        self.limpar_preview_posicionamento();
+        self.gerenciador_turnos.iniciar_jogo();
+    }
+
+    fn atualizar_preview_posicionamento(&mut self) {
+        let Some(player_map) = self.base().try_get_node_as::<TileMapLayer>("CampoJogador") else {
+            return;
+        };
+        let Some(mut preview_map) = self
+            .base()
+            .try_get_node_as::<TileMapLayer>("PreviewPosicionamento")
+        else {
+            return;
+        };
+
+        let mouse_pos = self.base().get_global_mouse_position();
+        let Some((x, y, _)) = conversao_coordenadas::clique_para_coordenada(player_map, mouse_pos) else {
+            limpar_preview(&mut preview_map);
+            return;
+        };
+
+        let Some((nome_navio, _)) = self.fase_posicionamento.navio_atual() else {
+            limpar_preview(&mut preview_map);
+            return;
+        };
+
+        let Some(preview) = self
+            .fase_posicionamento
+            .preview_na_posicao(&self.jogador_humano, x, y)
+        else {
+            limpar_preview(&mut preview_map);
+            return;
+        };
+        
+        render_preview_posicionamento(&mut preview_map, nome_navio, &preview.celulas, preview.valido);
+    }
+
+    fn limpar_preview_posicionamento(&mut self) {
+        if let Some(mut preview_map) = self
+            .base()
+            .try_get_node_as::<TileMapLayer>("PreviewPosicionamento")
+        {
+            limpar_preview(&mut preview_map);
+        }
+    }
+
+    fn tratar_clique_disparo_jogador(&mut self, click_pos: Vector2) {
+        let Some(mut enemy_map) = self.base().try_get_node_as::<TileMapLayer>("CampoIA") else {
+            return;
+        };
+
+        let Some((x, y, map_coord)) =
+            conversao_coordenadas::clique_para_coordenada(enemy_map.clone(), click_pos)
+        else {
+            return;
+        };
+
+        let Some(ref mut ia) = self.jogador_ia else {
+            return;
+        };
+
+        let retorno = ia.receber_disparo(x, y);
+        godot_print!("{}", retorno.mensagem);
+
+        render_resultado_disparo(&mut enemy_map, map_coord, &retorno.resultado);
+
+        if retorno.resultado.foi_valido() {
+            let acertou = matches!(retorno.resultado, ResultadoDisparo::Acerto | ResultadoDisparo::Afundou(_));
+            let afundou = matches!(retorno.resultado, ResultadoDisparo::Afundou(_));
+            
+            self.gerenciador_turnos.processar_ataque_jogador(acertou, afundou);
+            
+            if ia.perdeu() {
+                return;
+            }
+            
+            if !acertou && !self.gerenciador_turnos.jogo_terminou() {
+                self.tempo_restante_ia = DELAY_TURNO_IA;
+            }
+        }
+    }
+
+    fn executar_turno_ia(&mut self) {
+        let Some(ref mut ia) = self.jogador_ia else {
+            return;
+        };
+
+        let Some((x, y)) = ia.escolher_alvo(self.jogador_humano.tabuleiro()) else {
+            return;
+        };
+
+        let retorno = self.jogador_humano.receber_disparo(x, y);
+        godot_print!("IA: {}", retorno.mensagem);
+
+        ia.notificar_resultado(x, y, &retorno);
+
+        if let Some(mut player_map) = self.base().try_get_node_as::<TileMapLayer>("CampoJogador") {
+            render_resultado_disparo(
+                &mut player_map,
+                Vector2i::new(y as i32, x as i32),
+                &retorno.resultado,
+            );
+        }
+
+        let acertou = matches!(retorno.resultado, ResultadoDisparo::Acerto | ResultadoDisparo::Afundou(_));
+        let afundou = matches!(retorno.resultado, ResultadoDisparo::Afundou(_));
+        
+        self.gerenciador_turnos.processar_ataque_ia(acertou, afundou);
+
+        if acertou && self.gerenciador_turnos.estado_atual() == EstadoTurno::TurnoIA {
+            self.tempo_restante_ia = DELAY_TURNO_IA;
+        }
+    }
+
+    fn atualizar_controle_cursor(&mut self) {
+        let mouse_pos = self.base().get_global_mouse_position();
+        let estado = self.gerenciador_turnos.estado_atual();
+
+        let (mostrar_jogador, mostrar_ia) = match estado {
+            EstadoTurno::PosicionamentoJogador => (true, false),
+            EstadoTurno::TurnoJogador => (false, true),
+            _ => (false, false),
+        };
+
+        if let Some(campo_jogador) = self.base().try_get_node_as::<TileMapLayer>("CampoJogador") {
+            if mostrar_jogador {
+                cursor::controlar_cursor(campo_jogador, mouse_pos);
+            } else {
+                cursor::esconder_cursor(campo_jogador);
+            }
+        }
+
+        if let Some(campo_ia) = self.base().try_get_node_as::<TileMapLayer>("CampoIA") {
+            if mostrar_ia {
+                cursor::controlar_cursor(campo_ia, mouse_pos);
+            } else {
+                cursor::esconder_cursor(campo_ia);
+            }
+        }
+    }
+
+    fn atualizar_visual_meu_campo(&mut self) {
+        if let Some(mut player_map) = self.base().try_get_node_as::<TileMapLayer>("CampoJogador") {
+            render_tabuleiro_jogador(&mut player_map, self.jogador_humano.tabuleiro());
+        }
+    }
+}
+
+
