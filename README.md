@@ -38,8 +38,10 @@ A pasta `src/` está organizada por camadas:
   - Define `ResultadoDisparo`.
   - Define `RetornoDisparo { resultado, mensagem }`.
   - Implementa `executar_disparo(...)` com regra de tiro e mensagem de feedback.
-- `player.rs`:
-  - Define a classe `Jogador` (estrutura básica atual).
+- `jogador.rs`:
+  - Define `TipoJogador` e `Jogador` com estado comum (tabuleiro e regras básicas).
+- `jogador_ia.rs`:
+  - Define `JogadorIA` e `EstrategiaIA` para comportamento da IA por estratégia.
 
 ### `src/presentation/`
 
