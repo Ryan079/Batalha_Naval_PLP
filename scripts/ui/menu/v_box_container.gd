@@ -1,7 +1,6 @@
 extends VBoxContainer
 
-const SESSION_FILE_PATH := "res://dados/usuario_atual.json"
-const LOGIN_SCENE_PATH := "res://TelaLogin.tscn"
+const LOGIN_SCENE_PATH := "res://scenes/ui/TelaLogin.tscn"
 
 func _ready():
 	$start.grab_focus()
@@ -32,8 +31,5 @@ func _on_conquistas_pressed():
 	get_tree().change_scene_to_file("res://scenes/CenaConquistas.tscn")
 
 func _on_sair_pressed():
-	var file := FileAccess.open(SESSION_FILE_PATH, FileAccess.WRITE)
-	if file != null:
-		file.store_string("{}")
-		file.close()
+	SessionStore.limpar_sessao()
 	get_tree().change_scene_to_file(LOGIN_SCENE_PATH)
