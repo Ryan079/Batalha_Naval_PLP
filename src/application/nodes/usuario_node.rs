@@ -37,12 +37,17 @@ fn conquista_para_str(conquista: &Conquista) -> &'static str {
     }
 }
 
+use godot::classes::ProjectSettings;
+
 #[godot_api]
 impl INode for UsuarioNode {
     fn init(base: Base<Node>) -> Self {
+        let ps = ProjectSettings::singleton();
+        let path_absoluto = ps.globalize_path("res://dados/usuarios.json").to_string();
+
         Self{
             service: UsuarioService {
-                repo: RepositorioUsuarioJson::new("dados/usuarios.json")
+                repo: RepositorioUsuarioJson::new(&path_absoluto)
             },
             base
         }
@@ -123,5 +128,19 @@ impl UsuarioNode {
             },
             Err(_) => PackedStringArray::new()
         }
+    }
+
+    #[func]
+    pub fn registrar_vitoria(&mut self, login: GString) -> bool {
+        self.service
+            .registrar_vitoria(&login.to_string())
+            .is_ok()
+    }
+
+    #[func]
+    pub fn registrar_derrota(&mut self, login: GString) -> bool {
+        self.service
+            .registrar_derrota(&login.to_string())
+            .is_ok()
     }
 }
