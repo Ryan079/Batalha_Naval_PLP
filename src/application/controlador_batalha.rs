@@ -116,14 +116,6 @@ impl INode2D for ControladorBatalha {
             self.gerenciador_turnos.rodada_atual(),
         );
 
-        // Detectar mudança de estado para PosicionamentoJogador e popular container
-        if self.estado_anterior == EstadoTurno::SelecaoDificuldade && 
-           self.gerenciador_turnos.estado_atual() == EstadoTurno::PosicionamentoJogador {
-            godot_print!("Mudou para PosicionamentoJogador - populando container");
-            self.popular_container_navios();
-        }
-        self.estado_anterior = self.gerenciador_turnos.estado_atual();
-
         if self.gerenciador_turnos.estado_atual() == EstadoTurno::SelecaoDificuldade {
             if let Some(campo_jogador) = self.base().try_get_node_as::<TileMapLayer>("CampoJogador") {
                 cursor::esconder_cursor(campo_jogador);
@@ -163,6 +155,10 @@ impl INode2D for ControladorBatalha {
         let estado_atual = self.gerenciador_turnos.estado_atual();
         if estado_atual != self.estado_anterior {
             match estado_atual {
+                EstadoTurno::PosicionamentoJogador => {
+                    godot_print!("Mudou para PosicionamentoJogador - populando container");
+                    self.popular_container_navios();
+                }
                 EstadoTurno::TurnoJogador => {
                     self.movimento_jogador_realizado = false;
                 }
