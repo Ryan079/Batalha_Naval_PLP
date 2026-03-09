@@ -126,9 +126,18 @@ scripts/
     `-- menu/v_box_container.gd
 
 scenes/
+|-- cena-batalha.tscn
+|-- modo_campanha.tscn
 `-- ui/
+    |-- CenaConquistas.tscn
     |-- TelaLogin.tscn
-    `-- MenuPrincipal.tscn
+    |-- MenuPrincipal.tscn
+    |-- tela_ranking.tscn
+    |-- tela_vitoria.tscn
+    |-- tela_derrota.tscn
+    |-- linha_jogador.tscn
+    |-- button.tscn
+    `-- meubotao.tscn
 ```
 
 Responsabilidades por camada:

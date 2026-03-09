@@ -1,8 +1,8 @@
 extends Node2D
 
 const CAMPANHA_SCENE_PATH := "res://scenes/modo_campanha.tscn"
-const VITORIA_SCENE_PATH := "res://scenes/tela_vitoria.tscn"
-const DERROTA_SCENE_PATH := "res://scenes/tela_derrota.tscn"
+const VITORIA_SCENE_PATH := "res://scenes/ui/tela_vitoria.tscn"
+const DERROTA_SCENE_PATH := "res://scenes/ui/tela_derrota.tscn"
 
 @onready var controlador: Node = $ControladorBatalha
 

@@ -25,10 +25,10 @@ func _on_dinamico_pressed():
 	get_tree().change_scene_to_file("res://scenes/modo_campanha.tscn")
 
 func _on_ranking_pressed():
-	get_tree().change_scene_to_file("res://scenes/tela_ranking.tscn")
+	get_tree().change_scene_to_file("res://scenes/ui/tela_ranking.tscn")
 
 func _on_conquistas_pressed():
-	get_tree().change_scene_to_file("res://scenes/CenaConquistas.tscn")
+	get_tree().change_scene_to_file("res://scenes/ui/CenaConquistas.tscn")
 
 func _on_sair_pressed():
 	SessionStore.limpar_sessao()
